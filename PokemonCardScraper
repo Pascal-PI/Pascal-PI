@@ -1,0 +1,99 @@
+# Colatz Conjecture
+
+# Function to get multiple sequences from user input
+def get_user_numbers():
+    numbers = input("Enter the numbers you want to analyze, separated by spaces: ")
+    return list(map(int, numbers.split()))
+
+# Function to generate Collatz sequence for a number
+def collatz_conjecture(num):
+    sequence = [num]
+    while num != 1:
+        if num % 2 == 0:
+            num //= 2
+        else:
+            num = 3 * num + 1
+        sequence.append(num)
+    return sequence
+
+# Function to analyze sequence with advanced statistics
+def analyze_sequence(seq):
+    steps = len(seq) - 1
+    highest_number = max(seq)
+    highest_step = seq.index(highest_number)
+    increases = sum(1 for i in range(1, len(seq)) if seq[i] > seq[i - 1])
+    decreases = sum(1 for i in range(1, len(seq)) if seq[i] < seq[i - 1])
+    increase_decrease_ratio = increases / max(decreases, 1)  # Avoid division by zero
+    mean_value = sum(seq) / len(seq)
+    median_value = sorted(seq)[len(seq) // 2]  # Simple median calculation
+    return {
+        'steps': steps,
+        'highest_number': highest_number,
+        'highest_step': highest_step,
+        'increases': increases,
+        'decreases': decreases,
+        'increase_decrease_ratio': increase_decrease_ratio,
+        'mean_value': mean_value,
+        'median_value': median_value,
+        'sequence': seq
+    }
+
+# Let's analyze user-provided sequences
+numbers = get_user_numbers()
+sequences = {}
+
+# Generate sequences for each number
+for num in numbers:
+    sequences[num] = collatz_conjecture(num)
+
+# Plot multiple Collatz sequences
+plt.figure(figsize=(12, 8))
+
+for num, seq in sequences.items():
+    plt.plot(seq, label=f'n = {num}', marker='o')
+
+plt.title("Collatz Conjecture Sequences for User-provided Starting Values")
+plt.xlabel("Steps")
+plt.ylabel("Value")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# Advanced Summary of the analysis with patterns and insights
+print("\nAdvanced Summary of the Collatz Sequences:")
+for num, seq in sequences.items():
+    analysis = analyze_sequence(seq)
+    print(f"Number: {num}")
+    print(f"  - Total steps: {analysis['steps']}")
+    print(f"  - Highest number reached: {analysis['highest_number']} (at step {analysis['highest_step']})")
+    print(f"  - Total increases: {analysis['increases']}")
+    print(f"  - Total decreases: {analysis['decreases']}")
+    print(f"  - Increase/Decrease ratio: {analysis['increase_decrease_ratio']:.2f}")
+    print(f"  - Mean value: {analysis['mean_value']:.2f}")
+    print(f"  - Median value: {analysis['median_value']}")
+    print(f"  - Final sequence: {analysis['sequence']}\n")
+
+# Visualizing a summary of the sequences with additional statistics
+# Histograms of sequence lengths (total steps), increases, and decreases
+fig, axes = plt.subplots(1, 3, figsize=(18, 5))
+
+# Plot total steps
+axes[0].hist([analyze_sequence(seq)['steps'] for seq in sequences.values()], bins=10, color='blue', alpha=0.7)
+axes[0].set_title("Distribution of Total Steps")
+axes[0].set_xlabel("Steps")
+axes[0].set_ylabel("Frequency")
+
+# Plot increases
+axes[1].hist([analyze_sequence(seq)['increases'] for seq in sequences.values()], bins=10, color='green', alpha=0.7)
+axes[1].set_title("Distribution of Increases")
+axes[1].set_xlabel("Increases")
+axes[1].set_ylabel("Frequency")
+
+# Plot decreases
+axes[2].hist([analyze_sequence(seq)['decreases'] for seq in sequences.values()], bins=10, color='red', alpha=0.7)
+axes[2].set_title("Distribution of Decreases")
+axes[2].set_xlabel("Decreases")
+axes[2].set_ylabel("Frequency")
+
+plt.tight_layout()
+plt.show()
