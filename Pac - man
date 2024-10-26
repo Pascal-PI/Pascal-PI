@@ -1,0 +1,550 @@
+import pygame
+import random
+import math
+
+# Initialize pygame
+pygame.init()
+
+# Screen dimensions
+SCREEN_WIDTH = 600
+SCREEN_HEIGHT = 600
+GRID_SIZE = 30
+GRID_WIDTH = SCREEN_WIDTH // GRID_SIZE
+GRID_HEIGHT = SCREEN_HEIGHT // GRID_SIZE
+
+# Colors
+BLACK = (0, 0, 0)
+YELLOW = (255, 255, 0)
+PACMAN_COLOR = YELLOW
+WHITE = (255, 255, 255)
+BLUE = (0, 0, 255)
+GHOST_COLOR = (255, 0, 0)  # Red color for ghosts
+VULNERABLE_COLOR = (0, 0, 255)  # Blue color when ghosts are vulnerable
+PEANUT_COLOR = (205, 133, 63)  # Brown color for peanuts
+RED = (255, 0, 0)  # Red color for power pellets
+
+# Set up screen
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Pac-Man")
+
+# FPS (Frames per second)
+clock = pygame.time.Clock()
+FPS = 10  # Adjust as needed
+
+# Font for displaying score and messages
+font = pygame.font.SysFont(None, 36)
+
+# Pac-Man class
+class PacMan:
+    def __init__(self):
+        self.x = GRID_WIDTH // 2 * GRID_SIZE
+        self.y = GRID_HEIGHT // 2 * GRID_SIZE
+        self.speed = GRID_SIZE
+        self.dx = 1  # Pac-Man starts moving to the right
+        self.dy = 0
+        self.power_mode = False
+        self.power_mode_timer = 0
+        self.mouth_open = True  # For animation
+        self.mouth_angle = 30  # Angle of the mouth
+
+    def update(self, walls):
+        # Toggle mouth state for animation
+        self.mouth_open = not self.mouth_open
+
+        # Calculate new position
+        new_x = self.x + self.dx * self.speed
+        new_y = self.y + self.dy * self.speed
+
+        # Check for collision with walls
+        if not self.check_wall_collision(new_x, new_y, walls):
+            self.x = new_x
+            self.y = new_y
+
+        # Keep Pac-Man within screen boundaries (wrap around)
+        self.x = self.x % SCREEN_WIDTH
+        self.y = self.y % SCREEN_HEIGHT
+
+    def draw(self):
+        center = (self.x + GRID_SIZE // 2, self.y + GRID_SIZE // 2)
+        radius = GRID_SIZE // 2
+
+        # Determine the direction Pac-Man is facing
+        if self.dx == 1:
+            angle = 0
+        elif self.dx == -1:
+            angle = 180
+        elif self.dy == -1:
+            angle = 90
+        elif self.dy == 1:
+            angle = 270
+        else:
+            angle = 0
+
+        if self.mouth_open:
+            pygame.draw.circle(screen, PACMAN_COLOR, center, radius)
+        else:
+            # Draw Pac-Man with an open mouth
+            mouth_angle = self.mouth_angle
+            start_angle = math.radians(mouth_angle + angle)
+            end_angle = math.radians(360 - mouth_angle + angle)
+            pygame.draw.polygon(screen, PACMAN_COLOR, [
+                center,
+                (
+                    center[0] + radius * math.cos(start_angle),
+                    center[1] - radius * math.sin(start_angle)
+                ),
+                (
+                    center[0] + radius * math.cos(end_angle),
+                    center[1] - radius * math.sin(end_angle)
+                )
+            ])
+            pygame.draw.circle(screen, PACMAN_COLOR, center, radius)
+            # Draw mouth (black triangle)
+            pygame.draw.polygon(screen, BLACK, [
+                center,
+                (
+                    center[0] + radius * math.cos(start_angle),
+                    center[1] - radius * math.sin(start_angle)
+                ),
+                (
+                    center[0] + radius * math.cos(end_angle),
+                    center[1] - radius * math.sin(end_angle)
+                )
+            ])
+
+    def change_direction(self, direction):
+        # Change direction, but prevent reversing direction
+        if direction == pygame.K_LEFT and self.dx != 1:
+            self.dx = -1
+            self.dy = 0
+        elif direction == pygame.K_RIGHT and self.dx != -1:
+            self.dx = 1
+            self.dy = 0
+        elif direction == pygame.K_UP and self.dy != 1:
+            self.dx = 0
+            self.dy = -1
+        elif direction == pygame.K_DOWN and self.dy != -1:
+            self.dx = 0
+            self.dy = 1
+
+    def check_collision(self, other):
+        # Check if Pac-Man's center overlaps with another object
+        pacman_center = (self.x + GRID_SIZE // 2, self.y + GRID_SIZE // 2)
+        other_center = (other.x + GRID_SIZE // 2, other.y + GRID_SIZE // 2)
+        distance = ((pacman_center[0] - other_center[0]) ** 2 + (pacman_center[1] - other_center[1]) ** 2) ** 0.5
+        return distance < GRID_SIZE // 2
+
+    def check_wall_collision(self, new_x, new_y, walls):
+        # Check if the new position collides with any walls
+        for wall in walls:
+            if wall.rect.collidepoint(new_x + GRID_SIZE // 2, new_y + GRID_SIZE // 2):
+                return True
+        return False
+
+# Ghost class
+class Ghost:
+    def __init__(self, x, y):
+        self.x = x * GRID_SIZE
+        self.y = y * GRID_SIZE
+        self.start_x = x * GRID_SIZE
+        self.start_y = y * GRID_SIZE
+        self.speed = GRID_SIZE
+        self.dx = 0
+        self.dy = 1  # Ghost starts moving down
+        self.direction_choices = [pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT]
+        self.vulnerable = False
+        self.respawn_timer = 0  # New attribute for respawn delay
+
+    def update(self, walls):
+        # Handle respawn timer
+        if self.respawn_timer > 0:
+            self.respawn_timer -= 1
+            if self.respawn_timer == 0:
+                self.vulnerable = False  # Reset vulnerability when respawning
+            return  # Skip movement and direction change while waiting to respawn
+
+        # Randomly change direction occasionally
+        if random.randint(0, 10) == 0:
+            self.change_direction(random.choice(self.direction_choices))
+
+        # Calculate new position
+        new_x = self.x + self.dx * self.speed
+        new_y = self.y + self.dy * self.speed
+
+        # Check for collision with walls
+        if not self.check_wall_collision(new_x, new_y, walls):
+            self.x = new_x
+            self.y = new_y
+
+        # Keep ghost within screen boundaries (wrap around)
+        self.x = self.x % SCREEN_WIDTH
+        self.y = self.y % SCREEN_HEIGHT
+
+    def draw(self):
+        # Only draw the ghost if it's not waiting to respawn
+        if self.respawn_timer == 0:
+            x = self.x
+            y = self.y
+            width = GRID_SIZE
+            height = GRID_SIZE
+            body_color = VULNERABLE_COLOR if self.vulnerable else GHOST_COLOR
+
+            # Draw ghost body (rectangle)
+            body_rect = pygame.Rect(x, y + height // 4, width, height * 3 // 4)
+            pygame.draw.rect(screen, body_color, body_rect)
+
+            # Draw ghost head (semi-circle)
+            pygame.draw.circle(screen, body_color, (x + width // 2, y + height // 4), width // 2)
+
+            # Draw ghost eyes
+            eye_radius = width // 8
+            eye_offset_x = width // 4
+            eye_offset_y = height // 4
+            pygame.draw.circle(screen, WHITE, (x + eye_offset_x, y + eye_offset_y), eye_radius)
+            pygame.draw.circle(screen, WHITE, (x + width - eye_offset_x, y + eye_offset_y), eye_radius)
+            # Pupils
+            pupil_radius = eye_radius // 2
+            pygame.draw.circle(screen, BLACK, (x + eye_offset_x, y + eye_offset_y), pupil_radius)
+            pygame.draw.circle(screen, BLACK, (x + width - eye_offset_x, y + eye_offset_y), pupil_radius)
+
+            # Draw ghost bottom (zig-zag)
+            points = []
+            num_zags = 4
+            zag_width = width // num_zags
+            for i in range(num_zags + 1):
+                x_pos = x + i * zag_width
+                y_pos = y + height if i % 2 == 0 else y + height - height // 8
+                points.append((x_pos, y_pos))
+            pygame.draw.polygon(screen, body_color, points)
+
+    def change_direction(self, direction):
+        if direction == pygame.K_LEFT:
+            self.dx = -1
+            self.dy = 0
+        elif direction == pygame.K_RIGHT:
+            self.dx = 1
+            self.dy = 0
+        elif direction == pygame.K_UP:
+            self.dx = 0
+            self.dy = -1
+        elif direction == pygame.K_DOWN:
+            self.dx = 0
+            self.dy = 1
+
+    def check_wall_collision(self, new_x, new_y, walls):
+        # Check if the new position collides with any walls
+        for wall in walls:
+            if wall.rect.collidepoint(new_x + GRID_SIZE // 2, new_y + GRID_SIZE // 2):
+                return True
+        return False
+
+    def reset(self, wait_time=0):
+        # Set respawn timer and reset position after delay
+        self.respawn_timer = wait_time
+        self.x = self.start_x
+        self.y = self.start_y
+        self.dx = 0
+        self.dy = 1  # Reset direction
+
+    def check_collision(self, pacman):
+        # Check if ghost's center overlaps with Pac-Man's center
+        if self.respawn_timer > 0:
+            return False  # Cannot collide while waiting to respawn
+        ghost_center = (self.x + GRID_SIZE // 2, self.y + GRID_SIZE // 2)
+        pacman_center = (pacman.x + GRID_SIZE // 2, pacman.y + GRID_SIZE // 2)
+        distance = ((ghost_center[0] - pacman_center[0]) ** 2 + (ghost_center[1] - pacman_center[1]) ** 2) ** 0.5
+        return distance < GRID_SIZE // 2
+
+# Wall class
+class Wall:
+    def __init__(self, x, y):
+        self.rect = pygame.Rect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE, GRID_SIZE)
+
+    def draw(self):
+        pygame.draw.rect(screen, BLUE, self.rect)
+
+# Dot class
+class Dot:
+    def __init__(self, x, y):
+        self.x = x * GRID_SIZE
+        self.y = y * GRID_SIZE
+        self.radius = 5
+        self.is_power_pellet = False
+
+    def draw(self):
+        color = RED if self.is_power_pellet else WHITE
+        pygame.draw.circle(screen, color, (self.x + GRID_SIZE // 2, self.y + GRID_SIZE // 2), self.radius)
+
+# Peanut class
+class Peanut:
+    def __init__(self, x, y, duration):
+        self.x = x * GRID_SIZE
+        self.y = y * GRID_SIZE
+        self.timer = duration  # Duration the peanut remains on screen
+
+    def update(self):
+        self.timer -= 1
+        return self.timer <= 0  # Return True if the peanut should be removed
+
+    def draw(self):
+        # Drawing a circle to represent the peanut
+        pygame.draw.circle(screen, PEANUT_COLOR, (self.x + GRID_SIZE // 2, self.y + GRID_SIZE // 2), GRID_SIZE // 2)
+
+# Maze definition
+maze = [
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # y=0 (Top wall)
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],  # y=1
+    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],  # y=2
+    [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],  # y=3
+    [1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1],  # y=4
+    [1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1],  # y=5
+    [1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1],  # y=6
+    [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],  # y=7
+    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],  # y=8
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],  # y=9
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # y=10 (Middle wall)
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],  # y=11
+    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],  # y=12
+    [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],  # y=13
+    [1, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1],  # y=14
+    [1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1],  # y=15
+    [1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1],  # y=16
+    [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],  # y=17
+    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1],  # y=18
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # y=19 (Bottom wall)
+]
+
+# Create a vertical path in the middle column
+for y in range(1, GRID_HEIGHT - 1):
+    maze[y][GRID_WIDTH // 2] = 0  # Open space in the middle column
+
+# Adjust walls and dots accordingly
+walls = []
+dots = []
+for y, row in enumerate(maze):
+    for x, cell in enumerate(row):
+        if cell == 1:
+            walls.append(Wall(x, y))
+        elif cell == 0:
+            dot = Dot(x, y)
+            # Place power pellets at specific positions
+            if (x, y) in [(1, 1), (18, 8), (1, 11), (18, 18)]:
+                dot.is_power_pellet = True
+            dots.append(dot)
+
+# Create Pac-Man
+pacman = PacMan()
+
+# Create ghosts
+ghosts = [
+    Ghost(1, 1),    # Top-left corner
+    Ghost(18, 8),   # Top-right area
+    Ghost(1, 11),   # Bottom-left corner
+    Ghost(18, 18)   # Bottom-right corner
+]
+
+# List to hold peanuts
+peanuts = []
+
+# Spawn a peanut at the beginning
+while True:
+    x = random.randint(1, GRID_WIDTH - 2)
+    y = random.randint(1, GRID_HEIGHT - 2)
+    if maze[y][x] == 0:
+        # Ensure the position is not occupied by Pac-Man or a ghost
+        if (x * GRID_SIZE != pacman.x or y * GRID_SIZE != pacman.y) and all(ghost.x != x * GRID_SIZE or ghost.y != y * GRID_SIZE for ghost in ghosts):
+            peanuts.append(Peanut(x, y, duration=FPS * 10))  # Peanut lasts for 10 seconds
+            break
+
+# Score and lives variables
+score = 0
+lives = 3  # Number of lives Pac-Man starts with
+game_over = False
+
+# Function to pause the game
+def pause_for_seconds(seconds):
+    pause_ticks = pygame.time.get_ticks()
+    while pygame.time.get_ticks() - pause_ticks < seconds * 1000:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+        # Display a message explaining that Pac-Man got hit
+        hit_text = font.render("You got hit by a ghost!", True, WHITE)
+        screen.blit(hit_text, (SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 - 20))
+        # Display "Get Ready!" below the hit message
+        get_ready_text = font.render("Get Ready!", True, WHITE)
+        screen.blit(get_ready_text, (SCREEN_WIDTH // 2 - 80, SCREEN_HEIGHT // 2 + 20))
+        pygame.display.flip()
+        clock.tick(FPS)
+
+# Function to draw small Pac-Man icons
+def draw_small_pacman(x, y):
+    radius = GRID_SIZE // 2 - 5
+    pygame.draw.circle(screen, PACMAN_COLOR, (x + radius, y + radius), radius)
+    # Draw mouth
+    pygame.draw.polygon(screen, BLACK, [
+        (x + radius, y + radius),
+        (x + 2 * radius, y + radius - radius // 2),
+        (x + 2 * radius, y + radius + radius // 2),
+    ])
+
+# Main game loop
+running = True
+while running:
+    screen.fill(BLACK)
+
+    # Handle events (user input)
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.KEYDOWN:
+            if game_over and event.key == pygame.K_r:
+                # Reset the game
+                lives = 3
+                score = 0
+                game_over = False
+                # Reset Pac-Man
+                pacman = PacMan()
+                # Reset ghosts
+                ghosts = [
+                    Ghost(1, 1),
+                    Ghost(18, 8),
+                    Ghost(1, 11),
+                    Ghost(18, 18)
+                ]
+                # Reset walls and dots
+                walls = []
+                dots = []
+                for y, row in enumerate(maze):
+                    for x, cell in enumerate(row):
+                        if cell == 1:
+                            walls.append(Wall(x, y))
+                        elif cell == 0:
+                            dot = Dot(x, y)
+                            if (x, y) in [(1, 1), (18, 8), (1, 11), (18, 18)]:
+                                dot.is_power_pellet = True
+                            dots.append(dot)
+                # Clear peanuts
+                peanuts = []
+            else:
+                pacman.change_direction(event.key)
+
+    # Update game only if not game over
+    if not game_over:
+        # Update Pac-Man
+        pacman.update(walls)
+
+        # Handle dot collisions and power mode
+        remaining_dots = []
+        for dot in dots:
+            if pacman.check_collision(dot):
+                score += 1
+                if dot.is_power_pellet:
+                    pacman.power_mode = True
+                    pacman.power_mode_timer = FPS * 10
+                    for ghost in ghosts:
+                        ghost.vulnerable = True
+            else:
+                remaining_dots.append(dot)
+        dots = remaining_dots
+
+        # Update peanuts
+        remaining_peanuts = []
+        for peanut in peanuts:
+            if pacman.check_collision(peanut):
+                score += 50  # Bonus points for collecting a peanut
+                # Play peanut collection sound here if desired
+                # Do not add to remaining_peanuts to remove it
+            elif peanut.update():
+                # Peanut has expired
+                # Do not add to remaining_peanuts to remove it
+                pass
+            else:
+                remaining_peanuts.append(peanut)
+        peanuts = remaining_peanuts
+
+        # Randomly spawn peanuts
+        if random.randint(0, 500) == 0:
+            # Find a random position that's not a wall
+            while True:
+                x = random.randint(1, GRID_WIDTH - 2)
+                y = random.randint(1, GRID_HEIGHT - 2)
+                if maze[y][x] == 0:
+                    peanuts.append(Peanut(x, y, duration=FPS * 10))  # Peanut lasts for 10 seconds
+                    break
+
+        # Update ghosts
+        for ghost in ghosts:
+            ghost.update(walls)
+
+        # Check for collisions with ghosts
+        for ghost in ghosts:
+            if ghost.check_collision(pacman):
+                if ghost.vulnerable:
+                    score += 5
+                    ghost.reset(wait_time=FPS * 5)
+                else:
+                    lives -= 1
+                    if lives > 0:
+                        # Reset positions
+                        pacman.x = GRID_WIDTH // 2 * GRID_SIZE
+                        pacman.y = GRID_HEIGHT // 2 * GRID_SIZE
+                        pacman.dx = 1
+                        pacman.dy = 0
+                        for g in ghosts:
+                            g.reset()
+                        pause_for_seconds(2)
+                    else:
+                        game_over = True
+
+        # Power mode countdown
+        if pacman.power_mode:
+            pacman.power_mode_timer -= 1
+            if pacman.power_mode_timer <= 0:
+                pacman.power_mode = False
+                for ghost in ghosts:
+                    ghost.vulnerable = False
+
+    # Draw walls
+    for wall in walls:
+        wall.draw()
+
+    # Draw remaining dots
+    for dot in dots:
+        dot.draw()
+
+    # Draw peanuts
+    for peanut in peanuts:
+        peanut.draw()
+
+    # Draw ghosts
+    for ghost in ghosts:
+        ghost.draw()
+
+    # Draw Pac-Man
+    pacman.draw()
+
+    # Display score
+    score_text = font.render(f"Score: {score}", True, WHITE)
+    screen.blit(score_text, (10, 10))
+
+    # Display lives as icons
+    for i in range(lives):
+        draw_small_pacman(10 + i * (GRID_SIZE - 10), 50)
+
+    # Display game over message
+    if game_over:
+        game_over_text = font.render("Game Over!", True, WHITE)
+        screen.blit(game_over_text, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2))
+        restart_text = font.render("Press R to Restart", True, WHITE)
+        screen.blit(restart_text, (SCREEN_WIDTH // 2 - 130, SCREEN_HEIGHT // 2 + 40))
+
+    # Update the display
+    pygame.display.flip()
+
+    # Control the frame rate
+    clock.tick(FPS)
+
+# Quit pygame
+pygame.quit()
