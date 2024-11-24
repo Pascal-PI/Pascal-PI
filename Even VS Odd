@@ -1,0 +1,25 @@
+# Python 3
+
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.metrics import accuracy_score
+
+X=np.array([i for i in range(1,101)])
+X_derived=X%2
+y=np.array([0 if i%2!=0 else 1 for i in X])
+
+X_train,X_test,y_train,y_test=train_test_split(X_derived.reshape(-1,1),y,test_size=0.2,random_state=42)
+
+model=KNeighborsClassifier(n_neighbors=3)
+model.fit(X_train,y_train)
+
+predictions=model.predict(X_test)
+accuracy=accuracy_score(y_test,predictions)
+
+user_input=int(input("Enter a number: "))
+new_number=np.array([[user_input%2]])
+prediction_for_new_number=model.predict(new_number)
+
+print(f"Prediction for number {user_input}: {'Even' if prediction_for_new_number==1 else 'Odd'}")
+print(f"Model accuracy: {accuracy*100:.2f}%")
