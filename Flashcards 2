@@ -1,0 +1,172 @@
+ # Python 3
+
+import json
+from tkinter import *
+from tkinter import simpledialog, messagebox
+import random
+
+class Flashcard:
+    def __init__(self, question, answer, category):
+        self.question = question
+        self.answer = answer
+        self.category = category
+        self.correct_count = 0
+        self.incorrect_count = 0
+
+class FlashcardApp:
+    def __init__(self, master, filename='flashcards.json'):
+        self.master = master
+        self.master.title("Flashcard App")
+        self.master.config(bg='white')
+        self.filename = filename
+        self.load_flashcards()
+        self.create_widgets()
+
+    def load_flashcards(self):
+        try:
+            with open(self.filename, 'r') as file:
+                self.flashcards = json.load(file)['flashcards']
+        except FileNotFoundError:
+            self.flashcards = []
+
+    def save_flashcards(self):
+        with open(self.filename, 'w') as file:
+            json.dump({"flashcards": self.flashcards}, file)
+
+    def create_widgets(self):
+        self.add_button = Button(self.master, text="Add Flashcard", command=self.add_flashcard, bg='white', fg='black')
+        self.add_button.grid(row=0, column=0, padx=10, pady=10)
+
+        self.view_button = Button(self.master, text="View Flashcards", command=self.view_flashcards, bg='white', fg='black')
+        self.view_button.grid(row=0, column=1, padx=10, pady=10)
+
+        self.edit_button = Button(self.master, text="Edit Flashcard", command=self.edit_flashcard, bg='white', fg='black')
+        self.edit_button.grid(row=1, column=0, padx=10, pady=10)
+
+        self.delete_button = Button(self.master, text="Delete Flashcard", command=self.delete_flashcard, bg='white', fg='black')
+        self.delete_button.grid(row=1, column=1, padx=10, pady=10)
+
+        self.quiz_button = Button(self.master, text="Quiz Mode", command=self.quiz_mode, bg='white', fg='black')
+        self.quiz_button.grid(row=2, column=0, columnspan=2, padx=10, pady=10)
+
+        self.dark_mode_button = Button(self.master, text="Toggle Dark Mode", command=self.toggle_dark_mode, bg='white', fg='black')
+        self.dark_mode_button.grid(row=3, column=0, columnspan=2, padx=10, pady=10)
+
+    def add_flashcard(self):
+        question = simpledialog.askstring("Input", "Enter the question:")
+        answer = simpledialog.askstring("Input", "Enter the answer:")
+        category = simpledialog.askstring("Input", "Enter the category:")
+        if question and answer and category:
+            new_flashcard = Flashcard(question, answer, category).__dict__
+            self.flashcards.append(new_flashcard)
+            self.save_flashcards()
+
+    def view_flashcards(self):
+        category = simpledialog.askstring("Input", "Enter the category to view (leave blank to view all):")
+        view_window = Toplevel(self.master)
+        view_window.title("View Flashcards")
+        view_window.config(bg='white')
+        for i, card in enumerate(self.flashcards):
+            if not category or card['category'].lower() == category.lower():
+                Label(view_window, text=f"Q{i+1}: {card['question']}", bg='white', fg='black').pack()
+                Label(view_window, text=f"A{i+1}: {card['answer']}", bg='white', fg='black').pack()
+                Label(view_window, text=f"Category: {card['category']}", bg='white', fg='black').pack()
+                Label(view_window, text=f"Correct: {card['correct_count']}", bg='white', fg='black').pack()
+                Label(view_window, text=f"Incorrect: {card['incorrect_count']}", bg='white', fg='black').pack()
+
+    def edit_flashcard(self):
+        try:
+            index = simpledialog.askinteger("Input", "Enter the flashcard number to edit:") - 1
+            if 0 <= index < len(self.flashcards):
+                question = simpledialog.askstring("Input", "Enter the new question:")
+                answer = simpledialog.askstring("Input", "Enter the new answer:")
+                category = simpledialog.askstring("Input", "Enter the new category:")
+                if question and answer and category:
+                    self.flashcards[index]['question'] = question
+                    self.flashcards[index]['answer'] = answer
+                    self.flashcards[index]['category'] = category
+                    self.save_flashcards()
+            else:
+                messagebox.showerror("Error", "Invalid flashcard number.")
+        except TypeError:
+            messagebox.showerror("Error", "Please enter a valid number.")
+
+    def delete_flashcard(self):
+        try:
+            index = simpledialog.askinteger("Input", "Enter the flashcard number to delete:") - 1
+            if 0 <= index < len(self.flashcards):
+                del self.flashcards[index]
+                self.save_flashcards()
+            else:
+                messagebox.showerror("Error", "Invalid flashcard number.")
+        except TypeError:
+            messagebox.showerror("Error", "Please enter a valid number.")
+
+    def quiz_mode(self):
+        self.current_index = 0
+        self.asked_indices = set()  # Keep track of asked questions
+        random.shuffle(self.flashcards)  # Shuffle flashcards
+        self.quiz_window = Toplevel(self.master)
+        self.quiz_window.title("Quiz Mode")
+        self.quiz_window.config(bg='white')
+        self.question_label = Label(self.quiz_window, text="", bg='white', fg='black')
+        self.question_label.pack()
+        self.answer_entry = Entry(self.quiz_window)
+        self.answer_entry.pack()
+        self.submit_button = Button(self.quiz_window, text="Submit", command=self.check_answer, bg='white', fg='black')
+        self.submit_button.pack()
+        self.next_flashcard()
+
+    def next_flashcard(self):
+        if len(self.asked_indices) < len(self.flashcards):
+            while self.current_index in self.asked_indices:
+                self.current_index = (self.current_index + 1) % len(self.flashcards)
+            self.asked_indices.add(self.current_index)
+            card = self.flashcards[self.current_index]
+            self.question_label.config(text=f"Question: {card['question']}")
+            self.answer_entry.delete(0, END)
+        else:
+            self.show_performance()
+            self.quiz_window.destroy()
+
+    def check_answer(self):
+        card = self.flashcards[self.current_index]
+        answer = self.answer_entry.get()
+        if answer.lower() == card['answer'].lower():
+            messagebox.showinfo("Result", "Correct!")
+            card['correct_count'] += 1
+        else:
+            messagebox.showinfo("Result", f"Wrong! The correct answer is: {card['answer']}")
+            card['incorrect_count'] += 1
+        self.save_flashcards()
+        self.current_index = (self.current_index + 1) % len(self.flashcards)
+        self.next_flashcard()
+
+    def show_performance(self):
+        total_questions = len(self.flashcards)
+        correct_answers = sum(card['correct_count'] for card in self.flashcards)
+        incorrect_answers = sum(card['incorrect_count'] for card in self.flashcards)
+        messagebox.showinfo("Quiz Completed", f"You answered {correct_answers} correct and {incorrect_answers} incorrect out of {total_questions} questions.")
+
+    def toggle_dark_mode(self):
+        if self.master['bg'] == 'white':
+            self.master.config(bg='black')
+            self.add_button.config(bg='black', fg='white')
+            self.view_button.config(bg='black', fg='white')
+            self.edit_button.config(bg='black', fg='white')
+            self.delete_button.config(bg='black', fg='white')
+            self.quiz_button.config(bg='black', fg='white')
+            self.dark_mode_button.config(bg='black', fg='white')
+        else:
+            self.master.config(bg='white')
+            self.add_button.config(bg='white', fg='black')
+            self.view_button.config(bg='white', fg='black')
+            self.edit_button.config(bg='white', fg='black')
+            self.delete_button.config(bg='white', fg='black')
+            self.quiz_button.config(bg='white', fg='black')
+            self.dark_mode_button.config(bg='white', fg='black')
+
+if __name__ == "__main__":
+    root = Tk()
+    app = FlashcardApp(root)
+    root.mainloop()
