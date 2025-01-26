@@ -1,0 +1,48 @@
+import openai
+import os
+from PIL import Image
+import requests
+from io import BytesIO
+
+# OpenAi key to allow use
+openai.api_key = os.getenv("Open ai key") # !!!! If abhay using; the key is off to avoid use by people trying to steal info
+
+# Function to generate an image using DALL·E
+# Arguments:
+# - prompt (str): The text prompt describing the image to generate.
+# - save_path (str): The file path where the generated image will be saved.
+def generate_image(prompt, save_path):
+    try:
+        # Call the OpenAI API to create an image based on the prompt.
+        response = openai.Image.create(
+            prompt=prompt,  # Description of the image to generate
+            n=1,           # Number of images to generate (1 in this case)
+            size="512x512" # Size of the generated image
+        )
+       
+        # Extract the image URL from the API response.
+        image_url = response['data'][0]['url']
+
+        # Fetch the image from the URL using an HTTP GET request.
+        response = requests.get(image_url)
+
+        # Open the image using PIL (Python Imaging Library) and save it locally.
+        img = Image.open(BytesIO(response.content))
+        img.save(save_path)
+
+        # Notify the user that the image was successfully saved.
+        print(f"Image saved to {save_path}")
+    except Exception as e:
+        # Print any errors that occur during the image generation process.
+        print(f"Error generating image: {e}")
+
+# Main script execution
+if __name__ == "__main__":
+    # Prompt the user to describe the image they want to generate.
+    user_prompt = input("Describe what you want to generate as an image: ")
+
+    # Define the path where the generated image will be saved.
+    save_path = "generated_image.png"
+
+    # Call the generate_image function with the user's prompt and the save path.
+    generate_image(user_prompt, save_path)
