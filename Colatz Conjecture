@@ -1,0 +1,35 @@
+# Python 3
+
+import matplotlib.pyplot as plt
+
+def plot(y):
+    print('Generating...')
+    x = list(range(len(y))) 
+    plt.plot(x, y, 'bo')
+    plt.plot(x, y, '-')
+    plt.grid()
+    print('Graphed!')
+    plt.show()
+
+def collatz_conjecture():
+    num = input('Enter a starting integer: ')
+    if not num.isdigit():
+        print('Please enter a valid integer.')
+        return 
+
+    num = int(num)
+    y = [num]  
+    print(num)
+
+    while num != 1:
+        if num % 2 == 0:
+            num //= 2
+        else:
+            num = num * 3 + 1
+
+        y.append(num)
+        print(num)
+	plot(y)
+
+if __name__ == '__main__':
+    collatz_conjecture()
