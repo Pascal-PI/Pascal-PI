@@ -1,0 +1,48 @@
+# Python 3
+
+import tkinter as tk
+from tkinter import colorchooser
+
+class PaintApp:
+    def __init__(self, root): 
+        self.root = root
+        self.root.title('Paint App')
+        self.root.geometry('800x600')
+        
+        self.color = 'white' # Default choice
+        self.brush_size = 5
+        
+        self.canvas = tk.Canvas(root, bg = 'black', width = 200, height = 200)
+        self.canvas.pack()
+        
+        self.button_frame = tk.Frame(root)
+        self.button_frame.pack()
+        
+        self.color_button = tk.Button(self.button_frame, text = 'Choose a color', command = self.choose_color)
+        self.color_button.pack(side = tk.LEFT)
+        
+        self.clear_button = tk.Button(self.button_frame, text = 'Clear Canvas', command = self.clear_canvas)
+        self.clear_button.pack(side = tk.RIGHT)
+        
+        self.canvas.bind('<B1-Motion>', self.paint)
+    def choose_color(self):
+        color_info = colorchooser.askcolor(color=self.color)
+        if color_info[1]:  
+            self.color = color_info[1]  
+            print('Color selected:', self.color)
+        
+    def clear_canvas(self):
+        self.canvas.delete('all')
+        print('Canvas Cleared')
+    
+    def paint():
+        x, y = event.x, event.y
+        self.canvas.create_oval(x - self.brush_size, y - self.brush_size,
+                                x + self.brush_size, y + self.brush_size, 
+                                fill =  self.color, outline = self.color)
+        
+        
+if __name__ == '__main__':
+    root = tk.Tk()
+    app = PaintApp(root)
+    root.mainloop()
